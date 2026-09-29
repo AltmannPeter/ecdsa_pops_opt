@@ -1,3 +1,5 @@
+use ff::PrimeField;
+use halo2curves::secp256r1::Secp256r1Affine;
 pub use halo2curves::{
     bls12381::{G1Affine, G1},
     t256::{T256Affine, T256},
@@ -7,7 +9,7 @@ use r1csipa::R1CSProofParams;
 use rok::{rok_compose, rok_compose_type, Nizk, RoK};
 
 use crate::{
-    circuit_native::CSchnorrCircuit,
+    circuit_native::{CSchnorrCircuit, CschnorrCircuitPublicInputs},
     errors::PopError,
     roks::{
         bls_to_tom::BlsToTomRoK, cschnorr_native_rok::CSchnorrNativeRoK, cschnorr_rok::CSchnorrRoK,
@@ -15,6 +17,15 @@ use crate::{
     },
     RelECDSA,
 };
+
+/// Size information for the R1CS used by the native circuit proof.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct R1CSMetrics {
+    /// Padded R1CS dimension (`rows + columns`) used by the IPA.
+    pub size: usize,
+    /// Number of constraints before padding.
+    pub constraints: usize,
+}
 
 /// A proof of possesion of a P256 signature using native arithmetic
 pub struct PoPNativeNizk {
@@ -61,6 +72,23 @@ impl PoPNativeNizk {
     /// Returns the circuit proof parameters.
     pub fn circuit_params(&self) -> &R1CSProofParams<T256Affine> {
         &self.circuit_params
+    }
+
+    /// Returns the R1CS size and constraint count for a 128-bit Fiat-Shamir
+    /// challenge.
+    pub fn r1cs_metrics(&self, challenge: u128) -> R1CSMetrics {
+        let public_inputs = CschnorrCircuitPublicInputs::new(
+            Secp256r1Affine::generator(),
+            <Secp256r1Affine as halo2curves::CurveAffine>::ScalarExt::from_u128(challenge),
+        );
+        let circuit = CSchnorrCircuit::<16>::new(None, public_inputs);
+        let (_, shape) = circuit.specialize_parameters(&self.circuit_params);
+        let columns = shape.num_vars + shape.num_io + 1;
+
+        R1CSMetrics {
+            size: (shape.num_cons + columns).next_power_of_two(),
+            constraints: shape.num_cons,
+        }
     }
 }
 

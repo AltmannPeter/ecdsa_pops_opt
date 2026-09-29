@@ -25,7 +25,11 @@ const NB_BITS_C: usize = 128;
 
 fn setup_ffa_circuit_rok() -> FFACircuitRoK<NB_BITS_C> {
     let relation = EcdsaPoPP256::<NB_BITS_C>;
-    let k = midnight_zk_stdlib::cost_model(&relation, None).k;
+    let model = midnight_zk_stdlib::cost_model(&relation, None);
+    println!(
+        "PLONK circuit: [k: {}, rows: {}, advice columns: {}, fixed columns: {}, lookups: {}]",
+        model.k, model.rows, model.advice_columns, model.fixed_columns, model.lookups,
+    );
     let asset_srs_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("workspace root")
@@ -33,7 +37,7 @@ fn setup_ffa_circuit_rok() -> FFACircuitRoK<NB_BITS_C> {
         .join("examples")
         .join("assets");
     std::env::set_var("SRS_DIR", asset_srs_dir);
-    let srs = srs_for_test(&relation, Some(k));
+    let srs = srs_for_test(&relation, Some(model.k));
     let vk = midnight_zk_stdlib::setup_vk(&srs, &relation);
     let pk = midnight_zk_stdlib::setup_pk(&relation, &vk);
     FFACircuitRoK::from_parts(srs, vk, pk)

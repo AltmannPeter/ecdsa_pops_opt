@@ -11,7 +11,7 @@ use halo2curves::{
     secp256r1::{Fq, Secp256r1Affine},
 };
 use merlin::Transcript;
-use rand_core::OsRng;
+use rand_core::{OsRng, RngCore};
 use rok::{Nizk, Relation};
 
 #[macro_use]
@@ -86,6 +86,26 @@ fn criterion_benchmark(c: &mut Criterion) {
     println!(
         "Proof size: [min: {}, average: {}, max: {}]",
         min_proof_size, average_proof_size, max_proof_size
+    );
+
+    let mut metrics_rng = OsRng;
+    let (r1cs_size_sum, constraints_sum) = (0..sample_size)
+        .map(|_| {
+            let mut bytes = [0u8; 16];
+            metrics_rng.fill_bytes(&mut bytes);
+            let challenge = u128::from_le_bytes(bytes);
+            nizk.r1cs_metrics(challenge)
+        })
+        .fold((0usize, 0usize), |(size_sum, constraints_sum), metrics| {
+            (
+                size_sum + metrics.size,
+                constraints_sum + metrics.constraints,
+            )
+        });
+    println!(
+        "R1CS: [average size: {}, average constraints: {}]",
+        r1cs_size_sum as f64 / sample_size as f64,
+        constraints_sum as f64 / sample_size as f64,
     );
 
     // Verifier time
