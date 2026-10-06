@@ -205,6 +205,8 @@ pub(crate) fn sub_vec<F: PrimeField>(a: &[F], b: &[F]) -> Vec<F> {
     a.iter().zip(b.iter()).map(|(a_i, b_i)| *a_i - *b_i).collect()
 }
 
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
+#[allow(non_snake_case)]
 pub(crate) fn check_r1cs_instance<F: PrimeField>(
     rows: usize,
     cols: usize,

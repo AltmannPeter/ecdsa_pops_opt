@@ -173,7 +173,7 @@ mod tests {
         nizk.ck_t256 = halo_g;
         nizk.ck_t256_blinding = halo_h;
 
-        let mut r = sample_random_ecdsa_instance_with_key::<G1Affine, 2>(
+        let r = sample_random_ecdsa_instance_with_key::<G1Affine, 2>(
             [nizk.ck_bls, nizk.ck_bls],
             nizk.ck_bls_blinding,
         );

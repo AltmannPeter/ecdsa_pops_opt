@@ -179,7 +179,7 @@ mod tests {
     use rok::{Relation, RoK};
 
     use crate::{
-        relations::tests::{pedersen_key, sample_random_cschnorr_instance},
+        relations::tests::sample_random_cschnorr_instance,
         roks::cschnorr_native_rok::CSchnorrNativeRoK,
     };
 

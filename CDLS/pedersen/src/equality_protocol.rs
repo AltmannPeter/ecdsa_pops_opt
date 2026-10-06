@@ -10,7 +10,7 @@ use ark_ec::{
 };
 use merlin::Transcript;
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{ops::Mul, UniformRand};
 use rand::{CryptoRng, RngCore};
 

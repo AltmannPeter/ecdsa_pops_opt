@@ -104,11 +104,6 @@ impl RelSMWitness {
         RelSMWitness { P, rho, z }
     }
 
-    /// Returns the point.
-    pub(crate) fn p(&self) -> &Secp256r1Affine {
-        &self.P
-    }
-
     /// Returns the commitment randomness.
     pub(crate) fn rho(
         &self,

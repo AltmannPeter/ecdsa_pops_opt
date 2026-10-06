@@ -93,8 +93,6 @@ impl RoK for GroupRoK {
         transcript.append_point(b"G generator", &self.G);
         transcript.append_point(b"H generator", &self.H);
 
-        let st = rs.statement();
-
         // append statement Cx, Cy, K,  m
         transcript.append_point(b"Cx commitment", &rs.statement().cx()[0]);
         // should never panic

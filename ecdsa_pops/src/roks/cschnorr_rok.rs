@@ -3,15 +3,14 @@
 use ark_std::{end_timer, start_timer};
 use ff::{Field, PrimeField};
 use halo2curves::{
-    group::Curve,
     secp256r1::Secp256r1Affine,
     serde::{endian::EndianRepr, SerdeObject},
     CurveAffine,
 };
 use merlin::Transcript;
-use r1csipa::{msm_function, TranscriptProtocol};
+use r1csipa::TranscriptProtocol;
 use rand_core::{CryptoRng, RngCore};
-use rok::{Relation, RelationProduct, RoK};
+use rok::{Relation, RoK};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -19,9 +18,8 @@ use crate::{
     relations::{
         rcshnorr::{RelCSchnorr, RelCSchnorrParams, RelCSchnorrStatement, RelCSchnorrWitness},
         recdsa::{RelECDSA, RelECDSAWitness},
-        rpedersen::{RelPedersen, RelPedersenParams, RelPedersenStatement, RelPedersenWitness},
     },
-    utils::{ecdsa::ECDSA, fp_to_scalars, Fq},
+    utils::{ecdsa::ECDSA, Fq},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -74,6 +74,7 @@ pub fn p256_to_arkp256(P: &Secp256r1Affine) -> Secp256r1AffineArk {
 }
 
 /// Converts halo2 Ft elements to CDLS-side t256 Fq (the base field).
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn ft_to_cdls_ft(a: &Ft) -> t256::Fq {
     ft_to_arkft(a)
 }
@@ -96,6 +97,7 @@ pub fn cdls_t256_to_t256(p: &SwAffine<t256::Config>) -> T256Affine {
 }
 
 /// Convert CDLS-side ark t256 base-field element to halo2 Ft.
+#[allow(dead_code)]
 pub(crate) fn cdls_ft_to_halo_ft(a: &t256::Fq) -> Ft {
     let mut bytes = Vec::new();
     a.serialize_compressed(&mut bytes).unwrap();

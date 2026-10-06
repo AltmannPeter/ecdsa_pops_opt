@@ -319,8 +319,6 @@ impl<P: PedersenConfig> NonZeroProof<P> {
             <sw::Projective<P> as VariableBaseMSM>::msm(&bases, &scalars).unwrap()
         };
 
-        let g_s3 = P::GENERATOR.mul(self.s3);
-
         if *chal == P::CM1 {
             (self.t1 != Affine::identity())
                 && (self.t3 - self.t1 == P::GENERATOR.mul(self.s3))

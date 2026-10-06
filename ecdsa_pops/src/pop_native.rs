@@ -13,7 +13,7 @@ use crate::{
     errors::PopError,
     roks::{
         bls_to_tom::BlsToTomRoK, cschnorr_native_rok::CSchnorrNativeRoK, cschnorr_rok::CSchnorrRoK,
-        native_circuit_rok::NativeCircuitRoK, pedersen_rok::PedersenRoK,
+        native_circuit_rok::NativeCircuitRoK,
     },
     RelECDSA,
 };

@@ -12,7 +12,6 @@ use merlin::Transcript;
 
 use ark_ff::fields::Field;
 use ark_serialize::CanonicalSerialize;
-use ark_serialize::Compress;
 use rand::{CryptoRng, RngCore};
 
 use crate::{
@@ -497,28 +496,20 @@ impl<P: PedersenConfig> PointAddProtocol<P> for ZKAttestPointAddProof<P> {
             r: <P as CurveConfig>::ScalarField::ZERO,
         };
 
-        let first = self
-            .mp1
-            .verify_with_challenge(&c7, &self.c8, &commit_one.comm, chal);
+        let first = self.mp1.verify_with_challenge(&c7, &self.c8, &commit_one.comm, chal);
 
         // Proof of c10 = c9 * c10.
         // We recover c9 as c4 - c2.
         let c9 = (c4.into_group() - c2).into_affine();
-        let second = self
-            .mp2
-            .verify_with_challenge(&c9, &self.c8, &self.c10, chal);
+        let second = self.mp2.verify_with_challenge(&c9, &self.c8, &self.c10, chal);
 
         // Proof of c11 = c10*c10
-        let third = self
-            .mp3
-            .verify_with_challenge(&self.c10, &self.c10, &self.c11, chal);
+        let third = self.mp3.verify_with_challenge(&self.c10, &self.c10, &self.c11, chal);
 
         // Proof of c13 = c10 * c12.
         // We recover c12 as c1 - c5
         let c12 = (c1.into_group() - c5).into_affine();
-        let fourth = self
-            .mp4
-            .verify_with_challenge(&self.c10, &c12, &self.c13, chal);
+        let fourth = self.mp4.verify_with_challenge(&self.c10, &c12, &self.c13, chal);
 
         // Verify that c5 + c1 + c3 == c11
         let c14 = (*c5 + c1 + c3).into_affine();

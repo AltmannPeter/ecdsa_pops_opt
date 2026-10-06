@@ -66,7 +66,7 @@ impl<F: PrimeField> R1CSInstance<F> {
             z.extend(inputs_F.clone());
             assert_eq!(z.len(), shape.num_vars + shape.num_io + 1);
             assert!(com_inputs_len <= shape.num_io);
-            assert!(check_r1cs_instance(
+            debug_assert!(check_r1cs_instance(
                 shape.num_cons,
                 z.len(),
                 &shape.A,

@@ -429,7 +429,7 @@ mod tests {
         let ck_t256 = pedersen_key::<T256Affine>(2, "test_bls_to_tom_rok");
 
         // sample a random ecdsa statement with two limbs
-        let mut rs = sample_random_ecdsa_instance::<G1Affine, 2>();
+        let rs = sample_random_ecdsa_instance::<G1Affine, 2>();
 
         // the two bls keys
         let ck_bls = vec![rs.params().gs()[0], *rs.params().h()];

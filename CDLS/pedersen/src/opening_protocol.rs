@@ -8,7 +8,7 @@
 
 use ark_ec::{
     short_weierstrass::{self as sw},
-    CurveConfig, CurveGroup, VariableBaseMSM,
+    CurveConfig, CurveGroup,
 };
 use merlin::Transcript;
 

@@ -38,3 +38,6 @@ harness = false
 default = []
 std = [ "ark-std/std", "ark-ff/std", "ark-ec/std" ]
 r1cs = [ "ark-r1cs-std" ]
+
+[lints.rust]
+non_local_definitions = "allow"

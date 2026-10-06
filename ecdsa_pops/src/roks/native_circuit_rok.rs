@@ -155,17 +155,15 @@ mod tests {
     use num_bigint::BigUint;
     use r1csipa::msm_function;
     use rand_core::{OsRng, RngCore};
-    use rok::{rok_compose, Nizk, Relation, RoK};
+    use rok::{Relation, RoK};
 
     use crate::{
         circuit_native::{utils::biguint_to_scalar, CSchnorrCircuit},
-        errors::PopError,
         relations::{
             rcschnorr_compact::{
                 RelCSchnorrCompact, RelCSchnorrCompactParams, RelCSchnorrCompactStatement,
                 RelCSchnorrCompactWitness,
             },
-            rcshnorr::{RelCSchnorr, RelCSchnorrParams, RelCSchnorrStatement, RelCSchnorrWitness},
             tests::pedersen_key,
         },
         roks::native_circuit_rok::NativeCircuitRoK,
