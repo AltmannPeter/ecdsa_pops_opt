@@ -32,7 +32,7 @@ use crate::{
 ///
 /// Statement: commitments (C_1, ..., C_6) to (a_x, a_y, b_x, b_y, t_x, t_y).
 /// Witness: the six coordinate scalars and their commitment blindings.
-#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(CanonicalSerialize, CanonicalDeserialize, Clone)]
 pub struct SqECPointAddProof<P: PedersenConfig> {
     /// C_τ = τ·G + r_τ·H, commitment to the slope τ.
     pub c_tau: sw::Affine<P>,
@@ -535,6 +535,173 @@ impl<P: PedersenConfig> SqECPointAddProof<P> {
         let chal_buf = SqECPointAdditionTranscript::challenge_scalar(transcript, b"c");
         let chal = <P as PedersenConfig>::make_challenge_from_buffer(&chal_buf);
         self.verify_with_challenge(c1, c2, c3, c4, c5, c6, &chal)
+    }
+
+    /// Returns the (bases, scalars) for one combined MSM that must equal zero,
+    /// or None if U_1 = O. All 9 group equations (1..7, 9, 10) are folded into
+    /// one check with independent random weights; eq (8) is checked directly.
+    /// Derived commitments (C_f1, C_p1, C_p2, C_f3, C_p3) are expanded into
+    /// C_1..C_6 so every base is an original point.
+    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::type_complexity)]
+    pub fn verification_terms<R: RngCore + CryptoRng>(
+        &self,
+        c1: &sw::Affine<P>,
+        c2: &sw::Affine<P>,
+        c3: &sw::Affine<P>,
+        c4: &sw::Affine<P>,
+        c5: &sw::Affine<P>,
+        c6: &sw::Affine<P>,
+        chal: &<P as CurveConfig>::ScalarField,
+        rng: &mut R,
+    ) -> Option<(Vec<sw::Affine<P>>, Vec<<P as CurveConfig>::ScalarField>)> {
+        // Eq (8): U_1 ?!= O
+        if self.u1.is_zero() {
+            return None;
+        }
+
+        let c = *chal;
+
+        // Independent random weights, one per equation. None may be fixed
+        // to 1 when terms from several proofs are combined.
+        let mut rand = || <P as CurveConfig>::ScalarField::rand(rng);
+        let r1 = rand();
+        let r2 = rand();
+        let r3 = rand();
+        let r4 = rand();
+        let r5 = rand();
+        let r6 = rand();
+        let r7 = rand();
+        let r9 = rand();
+        let r10 = rand();
+
+        // Total coefficient on C_f1 = C_3 - C_1, from eqs (2), (3), (10).
+        let k = -r2 * c + r3 * self.z_tau - r10 * self.v1;
+
+        let bases = vec![
+            P::GENERATOR,  // G
+            P::GENERATOR2, // H
+            self.c_tau,
+            *c1,
+            *c2,
+            *c3,
+            *c4,
+            *c5,
+            *c6,
+            self.t1,
+            self.t2,
+            self.t3,
+            self.t4,
+            self.t5,
+            self.t6,
+            self.t7,
+            self.u1,
+            self.u2,
+            self.u3,
+        ];
+
+        let scalars = vec![
+            // G: eqs (1), (2), (5), (7), (9)
+            r1 * self.z_tau + r2 * self.z_f1 + r5 * self.z_f3 + r7 * self.z_2 - r9 * self.v3,
+            // H: eqs (1)-(7), (10)
+            r1 * self.z_rtau
+                + r2 * self.z_rf1
+                + r3 * self.z_e1
+                + r4 * self.z_e2
+                + r5 * self.z_rf3
+                + r6 * self.z_e3
+                + r7 * self.z_r2
+                - r10 * self.v2,
+            // C_tau: eqs (1), (4), (6)
+            -r1 * c + r4 * self.z_tau + r6 * self.z_f3,
+            // C_1: -C_f1 part, C_p2 = C1+C3+C5 (eq 4), C_f3 = C1-C5 (eq 5)
+            -k - (r4 + r5) * c,
+            // C_2: C_p1 = C4-C2 (eq 3), C_p3 = C2+C6 (eq 6), opening (eq 7)
+            (r3 - r6 - r7) * c,
+            // C_3: +C_f1 part, C_p2 (eq 4)
+            k - r4 * c,
+            // C_4: C_p1 (eq 3)
+            -r3 * c,
+            // C_5: C_p2 (eq 4), C_f3 (eq 5)
+            (r5 - r4) * c,
+            // C_6: C_p3 (eq 6)
+            -r6 * c,
+            // T_1..T_7: eqs (1)-(7)
+            -r1,
+            -r2,
+            -r3,
+            -r4,
+            -r5,
+            -r6,
+            -r7,
+            // U_1: shared c·U_1 in eqs (9), (10)
+            (r9 + r10) * c,
+            // U_2: eq (10)
+            r10,
+            // U_3: eq (9)
+            r9,
+        ];
+
+        Some((bases, scalars))
+    }
+
+    pub fn batch_verify<R: RngCore + CryptoRng>(
+        items: &[(
+            &SqECPointAddProof<P>,
+            [sw::Affine<P>; 6],
+            <P as CurveConfig>::ScalarField,
+        )],
+        rng: &mut R,
+    ) -> bool {
+        let mut bases = Vec::with_capacity(19 * items.len());
+        let mut scalars = Vec::with_capacity(19 * items.len());
+        for (proof, [c1, c2, c3, c4, c5, c6], chal) in items {
+            match proof.verification_terms(c1, c2, c3, c4, c5, c6, chal, rng) {
+                Some((b, s)) => {
+                    bases.extend(b);
+                    scalars.extend(s);
+                }
+                None => return false, // some U_1 = O
+            }
+        }
+        <sw::Projective<P> as VariableBaseMSM>::msm(&bases, &scalars).unwrap().is_zero()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn verify_batched<R: RngCore + CryptoRng>(
+        &self,
+        transcript: &mut Transcript,
+        c1: &sw::Affine<P>,
+        c2: &sw::Affine<P>,
+        c3: &sw::Affine<P>,
+        c4: &sw::Affine<P>,
+        c5: &sw::Affine<P>,
+        c6: &sw::Affine<P>,
+        rng: &mut R,
+    ) -> bool {
+        Self::make_transcript(
+            transcript,
+            c1,
+            c2,
+            c3,
+            c4,
+            c5,
+            c6,
+            &self.c_tau,
+            &self.t1,
+            &self.t2,
+            &self.t3,
+            &self.t4,
+            &self.t5,
+            &self.t6,
+            &self.t7,
+            &self.u1,
+            &self.u2,
+            &self.u3,
+        );
+        let chal_buf = SqECPointAdditionTranscript::challenge_scalar(transcript, b"c");
+        let chal = <P as PedersenConfig>::make_challenge_from_buffer(&chal_buf);
+        Self::batch_verify(&[(self, [*c1, *c2, *c3, *c4, *c5, *c6], chal)], rng)
     }
 
     /// serialized_size. Bytes needed once serialised.

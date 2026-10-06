@@ -1,19 +1,15 @@
-use ark_ec::{short_weierstrass::Affine as SWAffine, AffineRepr};
-use ark_secp256r1::Config as SecpConfig;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
 use halo2curves::t256::T256Affine;
 use merlin::Transcript;
 use r1csipa::TranscriptProtocol;
+use rand_core::OsRng;
 use rand_core::{CryptoRng, RngCore};
 use rok::{RelTrivial, Relation, RoK};
 use serde::{Deserialize, Deserializer, Serialize};
 
 // CDLS library
-use pedersen::{
-    ec_point_add_protocol_opt_alone::SqECPointAddProof,
-    pedersen_config::{PedersenComm, PedersenConfig},
-};
+use pedersen::{ec_point_add_protocol_opt_alone::SqECPointAddProof, pedersen_config::PedersenComm};
 use t256::Config as TomConfig;
 
 use crate::{
@@ -175,8 +171,10 @@ impl RoK for PARoK {
         let mut inner = Transcript::new(b"CDLS Sq pa for PARoK");
         inner.append_message(b"outer transcript digest", &digest);
 
-        // Sq-PA verify: absorbs proof, derives challenge, checks all 10 equations.
-        let ok = proof.proof.verify(&mut inner, &cax, &cay, &cbx, &cby, &ctx, &cty);
+        // Sq-PA verify: absorbs proof, derives challenge, checks all equations in one MSM.
+        let ok = proof
+            .proof
+            .verify_batched(&mut inner, &cax, &cay, &cbx, &cby, &ctx, &cty, &mut OsRng);
 
         end_timer!(t);
         if ok {

@@ -1,14 +1,9 @@
-//! Implements the optimised EC point-addition protocol Π'_PA (Fig. 9).
+//! Implements the optimised EC point-addition protocol Π'_PA .
 //! It has: Optimisations 1 (Π_Sq for the squaring relation), 2 (sharing the
 //! mask of C_τ across coordinate proofs), and 3 (dropping Π_PD(C_2) opening
 //! proof, only valid when composed inside Π_SM).
 //! The protocol implemented here is inlined.
 //! DANGER: only use this inside the mul proof.
-//!
-//! Compared to the unoptimised [ECPointAddProof], saves:
-//! * Opt 1: 1 point + 2 scalars (mul -> sq ).
-//! * Opt 2: 2 points + 4 scalars (mask sharing for C_τ).
-//! * Opt 3: 1 point + 2 scalars (no C_2 opening proof).
 
 use ark_ec::{
     short_weierstrass::{self as sw},
@@ -16,7 +11,7 @@ use ark_ec::{
 };
 use ark_ff::{fields::Field, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{ops::Mul, UniformRand};
+use ark_std::UniformRand;
 use merlin::Transcript;
 use rand::{CryptoRng, RngCore};
 
@@ -30,7 +25,7 @@ use crate::{
 ///
 /// Statement: commitments (C_1, ..., C_6) to (a_x, a_y, b_x, b_y, t_x, t_y).
 /// Witness: the six coordinate scalars and their commitment blindings.
-#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(CanonicalSerialize, CanonicalDeserialize, Clone)]
 pub struct OptECPointAddProof<P: PedersenConfig> {
     /// C_τ = τ*G + r_τ*H, commitment to the slope τ = (b_y - a_y)/(b_x - a_x).
     pub c_tau: sw::Affine<P>,
@@ -142,19 +137,19 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
         }
     }
 
-    /// Sample masks, build the prover's first message.
+    /// Prover step 1: sample masks and build the first message.
+    /// No transcript access, so many instances can run in parallel.
     #[allow(clippy::too_many_arguments)]
-    pub fn create_intermediates<T: RngCore + CryptoRng>(
-        transcript: &mut Transcript,
+    pub fn first_message<T: RngCore + CryptoRng>(
         rng: &mut T,
         a: sw::Affine<<P as PedersenConfig>::OCurve>,
         b: sw::Affine<<P as PedersenConfig>::OCurve>,
         c1: &PedersenComm<P>,
         _c2: &PedersenComm<P>,
         c3: &PedersenComm<P>,
-        c4: &PedersenComm<P>,
-        c5: &PedersenComm<P>,
-        c6: &PedersenComm<P>,
+        _c4: &PedersenComm<P>,
+        _c5: &PedersenComm<P>,
+        _c6: &PedersenComm<P>,
     ) -> OptECPointAddIntermediate<P> {
         assert!(a != b); // No point-doubling.
 
@@ -163,11 +158,8 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
         let taua = <P as PedersenConfig>::from_ob_to_sf(tau);
         let c_tau_comm = PedersenComm::new(taua, rng);
 
-        // Derived commitments (verifier recomputes these).
-        let c_f1 = c3.comm.into_group() - c1.comm; // C_3 - C_1
-        let c_f3 = c1.comm.into_group() - c5.comm; // C_1 - C_5
-        let c_f1_aff = c_f1.into_affine();
-        let _c_f3_aff = c_f3.into_affine();
+        // Derived commitment C_f1 = C_3 - C_1 (verifier recomputes it).
+        let c_f1_aff = (c3.comm.into_group() - c1.comm).into_affine();
 
         // Sample masks.
         let a_tau = <P as CurveConfig>::ScalarField::rand(rng);
@@ -236,27 +228,6 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
             pts[0], pts[1], pts[2], pts[3], pts[4], pts[5], pts[6], pts[7], pts[8],
         );
 
-        // Append everything to the transcript.
-        Self::make_transcript(
-            transcript,
-            &c1.comm,
-            &_c2.comm,
-            &c3.comm,
-            &c4.comm,
-            &c5.comm,
-            &c6.comm,
-            &c_tau_comm.comm,
-            &t1,
-            &t2,
-            &t3,
-            &t4,
-            &t5,
-            &t6,
-            &u1,
-            &u2,
-            &u3,
-        );
-
         OptECPointAddIntermediate {
             c_tau_comm,
             a_tau,
@@ -284,7 +255,82 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
         }
     }
 
-    /// Build the full proof from intermediates and the challenge.
+    /// Append the statement and first message to the transcript.
+    #[allow(clippy::too_many_arguments)]
+    pub fn append_first_message(
+        transcript: &mut Transcript,
+        c1: &PedersenComm<P>,
+        c2: &PedersenComm<P>,
+        c3: &PedersenComm<P>,
+        c4: &PedersenComm<P>,
+        c5: &PedersenComm<P>,
+        c6: &PedersenComm<P>,
+        inter: &OptECPointAddIntermediate<P>,
+    ) {
+        Self::make_transcript(
+            transcript,
+            &c1.comm,
+            &c2.comm,
+            &c3.comm,
+            &c4.comm,
+            &c5.comm,
+            &c6.comm,
+            &inter.c_tau_comm.comm,
+            &inter.t1,
+            &inter.t2,
+            &inter.t3,
+            &inter.t4,
+            &inter.t5,
+            &inter.t6,
+            &inter.u1,
+            &inter.u2,
+            &inter.u3,
+        );
+    }
+
+    /// Squeeze the challenge scalar.
+    fn challenge(transcript: &mut Transcript) -> <P as CurveConfig>::ScalarField {
+        let chal_buf = OptECPointAdditionTranscript::challenge_scalar(transcript, b"c");
+        <P as PedersenConfig>::make_challenge_from_buffer(&chal_buf)
+    }
+
+    /// Prover step 2: absorb statement and first message, squeeze the challenge.
+    #[allow(clippy::too_many_arguments)]
+    pub fn append_and_challenge(
+        transcript: &mut Transcript,
+        c1: &PedersenComm<P>,
+        c2: &PedersenComm<P>,
+        c3: &PedersenComm<P>,
+        c4: &PedersenComm<P>,
+        c5: &PedersenComm<P>,
+        c6: &PedersenComm<P>,
+        inter: &OptECPointAddIntermediate<P>,
+    ) -> <P as CurveConfig>::ScalarField {
+        Self::append_first_message(transcript, c1, c2, c3, c4, c5, c6, inter);
+        Self::challenge(transcript)
+    }
+
+    /// Sample masks, build the prover's first message, append it to the
+    /// transcript.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_intermediates<T: RngCore + CryptoRng>(
+        transcript: &mut Transcript,
+        rng: &mut T,
+        a: sw::Affine<<P as PedersenConfig>::OCurve>,
+        b: sw::Affine<<P as PedersenConfig>::OCurve>,
+        c1: &PedersenComm<P>,
+        c2: &PedersenComm<P>,
+        c3: &PedersenComm<P>,
+        c4: &PedersenComm<P>,
+        c5: &PedersenComm<P>,
+        c6: &PedersenComm<P>,
+    ) -> OptECPointAddIntermediate<P> {
+        let inter = Self::first_message(rng, a, b, c1, c2, c3, c4, c5, c6);
+        Self::append_first_message(transcript, c1, c2, c3, c4, c5, c6, &inter);
+        inter
+    }
+
+    /// Prover step 3: build the full proof from intermediates and the challenge.
     #[allow(clippy::too_many_arguments)]
     pub fn create_proof_with_challenge(
         a: sw::Affine<<P as PedersenConfig>::OCurve>,
@@ -359,6 +405,7 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
         }
     }
 
+    /// Create.
     #[allow(clippy::too_many_arguments)]
     pub fn create<T: RngCore + CryptoRng>(
         transcript: &mut Transcript,
@@ -373,14 +420,13 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
         c5: &PedersenComm<P>,
         c6: &PedersenComm<P>,
     ) -> Self {
-        let inter = Self::create_intermediates(transcript, rng, a, b, c1, c2, c3, c4, c5, c6);
-        let chal_buf = OptECPointAdditionTranscript::challenge_scalar(transcript, b"c");
-        let chal = <P as PedersenConfig>::make_challenge_from_buffer(&chal_buf);
+        let inter = Self::first_message(rng, a, b, c1, c2, c3, c4, c5, c6);
+        let chal = Self::append_and_challenge(transcript, c1, c2, c3, c4, c5, c6, &inter);
         Self::create_proof_with_challenge(a, b, t, &inter, c1, c2, c3, c4, c5, c6, &chal)
     }
 
     /// Verify with externally-supplied challenge. Checks 9 equations
-    /// (1, 2, 3, 4, 5, 6, 8, 9, 10) — eq 7 dropped per Optimisation 3.
+    /// (1, 2, 3, 4, 5, 6, 8, 9, 10), eq 7 dropped per Optimisation 3.
     #[allow(clippy::too_many_arguments)]
     pub fn verify_with_challenge(
         &self,
@@ -491,9 +537,10 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
         lhs10 == rhs10
     }
 
-    /// Verify: re-derive challenge from transcript, then check.
+    /// Verifier step 1: absorb statement + proof's first message, squeeze the
+    /// challenge. Transcript only.
     #[allow(clippy::too_many_arguments)]
-    pub fn verify(
+    pub fn absorb(
         &self,
         transcript: &mut Transcript,
         c1: &sw::Affine<P>,
@@ -502,7 +549,7 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
         c4: &sw::Affine<P>,
         c5: &sw::Affine<P>,
         c6: &sw::Affine<P>,
-    ) -> bool {
+    ) -> <P as CurveConfig>::ScalarField {
         Self::make_transcript(
             transcript,
             c1,
@@ -522,8 +569,22 @@ impl<P: PedersenConfig> OptECPointAddProof<P> {
             &self.u2,
             &self.u3,
         );
-        let chal_buf = OptECPointAdditionTranscript::challenge_scalar(transcript, b"c");
-        let chal = <P as PedersenConfig>::make_challenge_from_buffer(&chal_buf);
+        Self::challenge(transcript)
+    }
+
+    /// Verify: re-derive challenge from transcript, then check.
+    #[allow(clippy::too_many_arguments)]
+    pub fn verify(
+        &self,
+        transcript: &mut Transcript,
+        c1: &sw::Affine<P>,
+        c2: &sw::Affine<P>,
+        c3: &sw::Affine<P>,
+        c4: &sw::Affine<P>,
+        c5: &sw::Affine<P>,
+        c6: &sw::Affine<P>,
+    ) -> bool {
+        let chal = self.absorb(transcript, c1, c2, c3, c4, c5, c6);
         self.verify_with_challenge(c1, c2, c3, c4, c5, c6, &chal)
     }
 
